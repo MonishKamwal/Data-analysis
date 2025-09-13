@@ -117,15 +117,33 @@ def add_regime_column(df, regime_periods):
 
 # Apply the function
 regime_ff_merged = add_regime_column(regime_ff_merged, regime_periods)
-print(regime_ff_merged.head(15))
-print(regime_ff_merged.tail(15))
-print(regime_ff_merged.info())
+#print(regime_ff_merged.head(15))
+#print(regime_ff_merged.tail(15))
+#print(regime_ff_merged.info())
 
 # Verify Regime Month Count 
 counts = regime_ff_merged['Regime'].value_counts()
-print("Regime Month Counts:")
-print(counts)
+#print("Regime Month Counts:")
+#print(counts)
 
 # NOTE: Missing values in Sample Period already verified earlier
 
 # NOTE: Date alignment between factors and anomalies already verified earlier
+
+# Data Quality Assurance for Appendix
+def data_quality_summary(df):
+    """
+    Quick data quality overview
+    """
+    print(f"Dataset Shape: {df.shape}")
+    print(f"Memory Usage: {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
+    print("\nData Types:")
+    print(df.dtypes.value_counts())
+    print("\nMissing Values:")
+    missing = df.isnull().sum()
+    print(missing[missing > 0].sort_values(ascending=False))
+    print(f"\nDuplicate Rows: {df.duplicated().sum()}")
+    print(f"Unique Values per Column:")
+    print(df.nunique().sort_values(ascending=False))
+
+#data_quality_summary(regime_ff_merged)
