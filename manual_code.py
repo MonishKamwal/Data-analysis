@@ -82,6 +82,7 @@ def merge_by_month_year(df1, df2, date_col1='date', date_col2='date', how='inner
     
     df1['_merge_key'] = df1[date_col1].dt.to_period('M')
     df2['_merge_key'] = df2[date_col2].dt.to_period('M')
+    df2 = df2.drop(date_col2, axis=1)  # Drop original date column to avoid duplication
     
     # Merge
     result = pd.merge(df1, df2, on='_merge_key', how=how)
@@ -96,3 +97,35 @@ regime_ff_merged = merge_by_month_year(regime_data, ff_factors, how='left')
 print(regime_ff_merged.head())
 print(regime_ff_merged.tail())
 print(regime_ff_merged.info())
+
+# Add 'Regime' column to regime_ff_merged
+def add_regime_column(df, regime_periods):
+    """
+    Add Regime column using simple loop logic
+    """
+    df = df.copy()  # Avoid SettingWithCopyWarning
+    df['Regime'] = None  # Default value
+    
+    for regime, (start_date, end_date) in regime_periods.items():
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+        
+        mask = (df['date'] >= start_dt) & (df['date'] <= end_dt)
+        df.loc[mask, 'Regime'] = regime
+    
+    return df
+
+# Apply the function
+regime_ff_merged = add_regime_column(regime_ff_merged, regime_periods)
+print(regime_ff_merged.head(15))
+print(regime_ff_merged.tail(15))
+print(regime_ff_merged.info())
+
+# Verify Regime Month Count 
+counts = regime_ff_merged['Regime'].value_counts()
+print("Regime Month Counts:")
+print(counts)
+
+# NOTE: Missing values in Sample Period already verified earlier
+
+# NOTE: Date alignment between factors and anomalies already verified earlier
