@@ -147,3 +147,48 @@ def data_quality_summary(df):
     print(df.nunique().sort_values(ascending=False))
 
 #data_quality_summary(regime_ff_merged)
+
+# Mean Monthly Return by Regime
+anomaly_cols = list(files.keys())
+monthly_mean = regime_ff_merged.groupby('Regime')[anomaly_cols].mean().round(4)
+print(monthly_mean) # NOTE: Multiply by 100 for % display
+
+# Standard Deviation of Monthly Returns by Regime
+monthly_std = regime_ff_merged.groupby('Regime')[anomaly_cols].std().round(4)
+print(monthly_std) # NOTE: Multiply by 100 for % display
+
+# Number of Observations by Regime
+monthly_count = regime_ff_merged.groupby('Regime')[anomaly_cols].count()
+print(monthly_count) # NOTE: Should be 56, 19, 58 for each regime respectively
+
+# Calculate Excess Returns = anomaly Return - RF for Sharpe Ratio and Hit Rate
+Excess_return_df = regime_ff_merged.copy()
+excess_return_cols = []
+for anomaly in list(files.keys()):
+    excess_col = anomaly + '_Excess'
+    excess_return_cols.append(excess_col)
+    Excess_return_df[excess_col] = Excess_return_df[anomaly] - Excess_return_df['RF']
+print(excess_return_cols)
+print(Excess_return_df.head())
+print(Excess_return_df.tail())
+print(Excess_return_df.info())
+
+# Calculate Sharpe Ratio for each anomaly
+sharpe_ratios = {}
+for anomaly in excess_return_cols:
+    mean_excess = Excess_return_df[anomaly].mean()
+    std_excess = Excess_return_df[anomaly].std()
+    if std_excess == 0:
+        sharpe_ratio = np.nan  # Avoid division by zero
+    sharpe_ratio = (mean_excess / std_excess) * np.sqrt(12)  # Annualized Sharpe Ratio
+    sharpe_ratios[anomaly] = round(sharpe_ratio, 4)
+
+# Create a DataFrame for easy viewing and export
+def create_sharpe_dataframe(sharpe_dict):
+    """Convert Sharpe ratios to DataFrame for easy manipulation"""
+    sharpe_df = pd.DataFrame(list(sharpe_dict.items()), columns=['Anomaly', 'Sharpe_Ratio'])
+    sharpe_df = sharpe_df.sort_values('Sharpe_Ratio', ascending=False, na_position='last')
+    return sharpe_df
+
+sharpe_df = create_sharpe_dataframe(sharpe_ratios)
+print(sharpe_df)
