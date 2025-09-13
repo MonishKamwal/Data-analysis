@@ -27,8 +27,8 @@ files = {
 }
 #print()
 data = pd.DataFrame()
-for anomaly, files in files.items():
-    df = pd.read_csv(files)
+for anomaly, file in files.items():
+    df = pd.read_csv(file)
     columns = df.columns.to_list()
     df = df[['date', 'portLS']]
     df['date'] = pd.to_datetime(df['date'], format='mixed')
@@ -38,10 +38,12 @@ for anomaly, files in files.items():
         data = df
     else:
         data = pd.merge(data, df, on='date', how='outer')
-    df.info()
-    df.head()
-    print('\n \n')
-data.dropna(subset = ['Accruals', 'Assest Growth', 'BM', 'Gross Profit', 'Momentum', 'Leaverage Ret'], inplace=True)
+    #df.info()
+    #df.head()
+    #print('\n \n')
+columns_to_modify = list(files.keys())
+data.dropna(subset = columns_to_modify, inplace=True)
+data[columns_to_modify] = data[columns_to_modify]/ 100
 #print(data.head())
 #print(data.tail())
 #print(data.info())
@@ -52,4 +54,45 @@ regime_data = data[(data['date'] >= start_date) & (data['date'] <= end_date)]
 #print(regime_data.tail())
 #print(regime_data.info())
 
+# Fama-French Factors
+ff_factors = pd.read_csv('copy.csv')
+col_ff = ff_factors.columns.to_list()
+col_ff[0] = 'date'
+ff_factors.columns = col_ff
+ff_factors['date'] = pd.to_datetime(ff_factors['date'], format='%Y%m')
+#print(ff_factors.head())
+#print(ff_factors.tail())
+#ff_factors.info()
+# Extract data within Thesis Timeframe
+modify_ff_cols = ['Mkt-RF', 'SMB', 'HML', 'RF']
+ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols].replace(-99.99, np.nan)
+ff_factors.dropna(subset=modify_ff_cols, inplace=True)
+ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols] / 100
+ff_factors = ff_factors[(ff_factors['date'] >= start_date) & (ff_factors['date'] <= end_date)] 
+#print(ff_factors.head())
+#print(ff_factors.tail())    
+#ff_factors.info()
 
+# Merge Regime Data with Fama-French Factors
+# Clean and efficient method
+def merge_by_month_year(df1, df2, date_col1='date', date_col2='date', how='inner'):
+    # Create period columns
+    df1 = df1.copy()
+    df2 = df2.copy()
+    
+    df1['_merge_key'] = df1[date_col1].dt.to_period('M')
+    df2['_merge_key'] = df2[date_col2].dt.to_period('M')
+    
+    # Merge
+    result = pd.merge(df1, df2, on='_merge_key', how=how)
+    
+    # Clean up
+    result = result.drop('_merge_key', axis=1)
+    
+    return result
+
+# Usage
+regime_ff_merged = merge_by_month_year(regime_data, ff_factors, how='left')
+print(regime_ff_merged.head())
+print(regime_ff_merged.tail())
+print(regime_ff_merged.info())
