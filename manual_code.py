@@ -39,7 +39,7 @@ for anomaly, file in files.items():
     df = df.dropna(subset=[anomaly])
     #df.info()
     #df.head()
-    print('\n \n')
+    #print('\n \n')
     if data.empty:
         data = df
     else:
@@ -47,9 +47,12 @@ for anomaly, file in files.items():
 
     #data.info()
     #data.head()
-    print('\n \n')
+    #print('\n \n')
 
 print(data.head())
 print(data.tail())
-data.info()
+#data.info()
 
+regime_data = data[(data['Date'] >= start_date) & (data['Date'] <= end_date)] 
+print(regime_data.head())
+print(regime_data.tail())
