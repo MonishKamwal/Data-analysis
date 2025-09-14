@@ -395,13 +395,13 @@ pre_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Pre-Crisis'
 crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Crisis']
 post_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Post-Crisis']
 
-pre_crisis_returns.info()
-crisis_returns.info()
-post_crisis_returns.info()
+#pre_crisis_returns.info()
+#crisis_returns.info()
+#post_crisis_returns.info()
 
-print(pre_crisis_returns.head())
-print(crisis_returns.head())
-print(post_crisis_returns.head())   
+#print(pre_crisis_returns.head())
+#print(crisis_returns.head())
+#print(post_crisis_returns.head())   
 
 t_test_results_pre_crisis_vs_crisis = {}
 t_test_results_crisis_vs_post_crisis = {}
@@ -454,5 +454,18 @@ def display_welchs_t_test_results(results_dict, group1_name, group2_name):
     print("-" * 80)
     print("Significance levels: *** p<0.01, ** p<0.05, * p<0.10")
     print("=" * 80)
-display_welchs_t_test_results(t_test_results_pre_crisis_vs_crisis, 'Pre-Crisis', 'Crisis')
-display_welchs_t_test_results(t_test_results_crisis_vs_post_crisis, 'Crisis', 'Post-Crisis')
+#display_welchs_t_test_results(t_test_results_pre_crisis_vs_crisis, 'Pre-Crisis', 'Crisis')
+#display_welchs_t_test_results(t_test_results_crisis_vs_post_crisis, 'Crisis', 'Post-Crisis')
+
+# Calculate and print 'Crisis Drop' = Mean(Crisis) - Mean(Pre-Crisis)
+print("\nCrisis Drop (Mean Crisis - Mean Pre-Crisis):")
+drop_results = {}
+for strategy, results in t_test_results_pre_crisis_vs_crisis.items():
+    drop = results['mean_group2'] - results['mean_group1']
+    drop_results[strategy] = drop
+# print drop_resutls in a formatted way
+print(f"{'Strategy':<25} {'Crisis Drop':<15}")
+print("-" * 40)
+for strategy, drop in drop_results.items():
+    print(f"{strategy:<25} {drop:<15.4f}")
+print("-" * 40) 
