@@ -554,15 +554,16 @@ plt.show()
 # TODO: Genereate LaTex Report
 
 # Save as excel
-ff_factors.to_excel('Excel/Fama_French_Factors_Clean.csv')
-monthly_mean.to_excel('Excel/Mean_Monthly_Return')
-monthly_std.to_excel('Excel/Standard_Deviation_Monthly')
-monthly_count.to_excel('Excel/Observation_Count_For_Regimes')
-Excess_return_df.to_excel('Excel/Final_Data_With_Anomalies_FFFactors_Regimes_ExcessReturns')
-sharpe_df.to_excel('Excel/Sharpe_Ratio_Returns')
-regime_sharpe_table.to_excel('Excel/Sharpe_Ratio_Excess_Returns')
-hit_rate_df.to_excel('Excel/Hit_Rate_Returns')
-hit_rate_excess_df.to_excel('Excel/Hit_Rate_Excess_Returns')
-t_stats_df.to_excel('Excel/Newey_West_T_Statistics')
+"""
+ff_factors.to_excel('Excel/Fama_French_Factors_Clean.xlsx')
+monthly_mean.to_excel('Excel/Mean_Monthly_Return.xlsx')
+monthly_std.to_excel('Excel/Standard_Deviation_Monthly.xlsx')
+monthly_count.to_excel('Excel/Observation_Count_For_Regimes.xlsx')
+Excess_return_df.to_excel('Excel/Final_Data_With_Anomalies_FFFactors_Regimes_ExcessReturns.xlsx')
+sharpe_df.to_excel('Excel/Sharpe_Ratio_Returns.xlsx')
+regime_sharpe_table.to_excel('Excel/Sharpe_Ratio_Excess_Returns.xlsx')
+hit_rate_df.to_excel('Excel/Hit_Rate_Returns.xlsx')
+hit_rate_excess_df.to_excel('Excel/Hit_Rate_Excess_Returns.xlsx')
+t_stats_df.to_excel('Excel/Newey_West_T_Statistics.xlsx')
+"""
 # NOTE: Welch's Test (Both), Crisis Drop and Recovery Rate not saved as excel
-
