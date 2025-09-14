@@ -94,9 +94,9 @@ def merge_by_month_year(df1, df2, date_col1='date', date_col2='date', how='inner
 
 # Usage
 regime_ff_merged = merge_by_month_year(regime_data, ff_factors, how='left')
-print(regime_ff_merged.head())
-print(regime_ff_merged.tail())
-print(regime_ff_merged.info())
+#print(regime_ff_merged.head())
+#print(regime_ff_merged.tail())
+#print(regime_ff_merged.info())
 
 # Add 'Regime' column to regime_ff_merged
 def add_regime_column(df, regime_periods):
@@ -147,20 +147,19 @@ def data_quality_summary(df):
     print(df.nunique().sort_values(ascending=False))
 
 #data_quality_summary(regime_ff_merged)
-data_quality_summary(regime_ff_merged)
 
 # Mean Monthly Return by Regime
 anomaly_cols = list(files.keys())
 monthly_mean = regime_ff_merged.groupby('Regime')[anomaly_cols].mean().round(4)
-print(monthly_mean) # NOTE: Multiply by 100 for % display
+#print(monthly_mean) # NOTE: Multiply by 100 for % display
 
 # Standard Deviation of Monthly Returns by Regime
 monthly_std = regime_ff_merged.groupby('Regime')[anomaly_cols].std().round(4)
-print(monthly_std) # NOTE: Multiply by 100 for % display
+#print(monthly_std) # NOTE: Multiply by 100 for % display
 
 # Number of Observations by Regime
 monthly_count = regime_ff_merged.groupby('Regime')[anomaly_cols].count()
-print(monthly_count) # NOTE: Should be 56, 19, 58 for each regime respectively
+#print(monthly_count) # NOTE: Should be 56, 19, 58 for each regime respectively
 
 # Calculate Excess Returns = anomaly Return - RF for Sharpe Ratio and Hit Rate
 Excess_return_df = regime_ff_merged.copy()
@@ -169,10 +168,10 @@ for anomaly in list(files.keys()):
     excess_col = anomaly + '_Excess'
     excess_return_cols.append(excess_col)
     Excess_return_df[excess_col] = Excess_return_df[anomaly] - Excess_return_df['RF']
-print(excess_return_cols)
-print(Excess_return_df.head())
-print(Excess_return_df.tail())
-print(Excess_return_df.info())
+#print(excess_return_cols)
+#print(Excess_return_df.head())
+#print(Excess_return_df.tail())
+#print(Excess_return_df.info())
 
 # Calculate Sharpe Ratio for each anomaly
 sharpe_ratios = {}
@@ -192,7 +191,7 @@ def create_sharpe_dataframe(sharpe_dict):
     return sharpe_df
 
 sharpe_df = create_sharpe_dataframe(sharpe_ratios)
-print(sharpe_df)
+#print(sharpe_df)
 
 # Sharpe Ratios by Regime and Anomaly
 def calculate_regime_sharpe_ratios(df):
@@ -215,8 +214,8 @@ def calculate_regime_sharpe_ratios(df):
 
 # Result format: 3×6 table (regimes × anomalies)
 regime_sharpe_table = calculate_regime_sharpe_ratios(Excess_return_df)
-print("Sharpe Ratios by Regime and Anomaly:")
-print(regime_sharpe_table.round(4))
+#print("Sharpe Ratios by Regime and Anomaly:")
+#print(regime_sharpe_table.round(4))
 
 
 # Calculate Hit Rate for each anomaly
@@ -227,19 +226,15 @@ def quick_hit_percentage(df, column):
 
 hit_rates_excess = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in excess_return_cols}
 hit_rate_excess_df = pd.DataFrame(list(hit_rates_excess.items()), columns=['Anomaly Excess', 'Hit_Rate'])
-hit_rate_excess_df.info()
-print("Hit Rates for Each Anomaly based on Excess Returns:")
-print(hit_rate_excess_df, end='\n\n')
+#hit_rate_excess_df.info()
+#print("Hit Rates for Each Anomaly based on Excess Returns:")
+#print(hit_rate_excess_df, end='\n\n')
 
 hit_rates = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in anomaly_cols}
 hit_rate_df = pd.DataFrame(list(hit_rates.items()), columns=['Anomaly', 'Hit_Rate'])
-hit_rate_df.info()
-print("Hit Rates for Each Anomaly:")
-print(hit_rate_df)
-
-import numpy as np
-import pandas as pd
-from scipy import stats
+#hit_rate_df.info()
+#print("Hit Rates for Each Anomaly:")
+#print(hit_rate_df)
 
 # Newey-West HAC Standard Errors and t-statistics
 def newey_west_variance(returns, lags=12):
@@ -384,12 +379,80 @@ def create_t_statistics_dataframe(results_dict):
 t_stats_results = calculate_t_stats_for_strategies(Excess_return_df, excess_return_cols, lags=12)
 
 # Display results
-display_t_statistics(t_stats_results)
+#display_t_statistics(t_stats_results)
 
 # Create DataFrame for further analysis
 t_stats_df = create_t_statistics_dataframe(t_stats_results)
-print("\nDataFrame format:")
-print(t_stats_df)
+#print("\nDataFrame format:")
+#print(t_stats_df)
 # NOTE: Cross checked the results of the t-statistics with Claude. It was suspicious at first but after reveiwing the data it said it might actually be correct
 # Save to CSV if needed
 #t_stats_df.to_csv('newey_west_t_statistics.csv', index=False)
+
+
+# Regime Comparison Test - Welch's T-test
+pre_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Pre-Crisis']
+crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Crisis']
+post_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Post-Crisis']
+
+pre_crisis_returns.info()
+crisis_returns.info()
+post_crisis_returns.info()
+
+print(pre_crisis_returns.head())
+print(crisis_returns.head())
+print(post_crisis_returns.head())   
+
+t_test_results_pre_crisis_vs_crisis = {}
+t_test_results_crisis_vs_post_crisis = {}
+
+def perform_welchs_t_test(group1, group2, columns):
+    results = {}
+    for col in columns:
+        t_stat, p_val = stats.ttest_ind(group1[col], group2[col], equal_var=False, nan_policy='omit')
+        results[col] = {
+            't_statistic': t_stat,
+            'p_value': p_val,
+            'mean_group1': group1[col].mean(),
+            'mean_group2': group2[col].mean(),
+        }
+    return results
+
+t_test_results_pre_crisis_vs_crisis = perform_welchs_t_test(pre_crisis_returns, crisis_returns, excess_return_cols)
+t_test_results_crisis_vs_post_crisis = perform_welchs_t_test(crisis_returns, post_crisis_returns, excess_return_cols)
+# Display results
+def display_welchs_t_test_results(results_dict, group1_name, group2_name):
+    print(f"\nWelch's T-test Results: {group1_name} vs {group2_name}")
+    print("=" * 80)
+    print(f"{'Strategy':<25} {'Mean_'+group1_name:<15} {'Mean_'+group2_name:<15} {'t-stat':<10} {'p-value':<12} {'Significant':<12}")
+    print("-" * 80)
+    
+    for strategy, results in results_dict.items():
+        mean1 = results['mean_group1']
+        mean2 = results['mean_group2']
+        t_stat = results['t_statistic']
+        p_val = results['p_value']
+        
+        # Determine significance
+        if not np.isnan(p_val):
+            if p_val < 0.01:
+                significance = "***"
+            elif p_val < 0.05:
+                significance = "**"
+            elif p_val < 0.10:
+                significance = "*"
+            else:
+                significance = ""
+        else:
+            significance = "N/A"
+        
+        if not any(np.isnan([mean1, mean2, t_stat, p_val])):
+            print(f"{strategy:<25} {mean1:<15.4f} {mean2:<15.4f} {t_stat:<10.3f} {p_val:<12.4f} {significance:<12}")
+        else:
+            print(f"{strategy:<25} {'N/A':<15} {'N/A':<15} {'N/A':<10} {'N/A':<12} {'N/A':<12}")
+    
+    print("-" * 80)
+    print("Significance levels: *** p<0.01, ** p<0.05, * p<0.10")
+    print("=" * 80)
+display_welchs_t_test_results(t_test_results_pre_crisis_vs_crisis, 'Pre-Crisis', 'Crisis')
+display_welchs_t_test_results(t_test_results_crisis_vs_post_crisis, 'Crisis', 'Post-Crisis')
