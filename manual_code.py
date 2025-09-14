@@ -503,19 +503,32 @@ regime_colors = {
     'Post-Crisis': '#ccffcc'
 }
 
-for anomaly in anomaly_cols:
-    plt.figure(figsize=(12, 6))
-    plt.plot(Excess_return_df['date'], Excess_return_df[anomaly], label=anomaly, color='blue')
-    for regime, (start, end) in regime_periods.items():
-        start_dt = pd.to_datetime(start)
-        end_dt = pd.to_datetime(end)
-        plt.axvspan(start_dt, end_dt, color=regime_colors[regime], alpha=0.3, label=regime)
-    plt.title(f'{anomaly} Long-Short Returns Over Time with Regime Shading')
-    plt.xlabel('Date')
-    plt.ylabel('Return')
-    handles = [mpatches.Patch(color=regime_colors[r], label=r) for r in regime_colors]
-    handles.append(plt.Line2D([], [], color='blue', label=anomaly))
-    plt.legend(handles=handles)
-    plt.tight_layout()
+# Plot all anomalies as base 100 index on one graph
+import itertools
+fig, ax = plt.subplots(figsize=(14, 6))
+color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+anomaly_colors = {anomaly: next(color_cycle) for anomaly in anomaly_cols}
 
+for anomaly in anomaly_cols:
+    returns = Excess_return_df[anomaly].fillna(0)
+    index = 100 * (1 + returns).cumprod()
+    ax.plot(Excess_return_df['date'], index, label=anomaly, color=anomaly_colors[anomaly])
+
+# Shade regimes
+for regime, (start, end) in regime_periods.items():
+    start_dt = pd.to_datetime(start)
+    end_dt = pd.to_datetime(end)
+    ax.axvspan(start_dt, end_dt, color=regime_colors[regime], alpha=0.2, label=regime)
+
+ax.set_title('Long-Short Returns Over Regimes (Base 100 Index, All Anomalies)')
+ax.set_xlabel('Date')
+ax.set_ylabel('Index (Base 100)')
+ax.grid(True)
+
+anomaly_handles = [plt.Line2D([], [], color=anomaly_colors[a], label=a) for a in anomaly_cols]
+regime_handles = [mpatches.Patch(color=regime_colors[r], label=r) for r in regime_colors]
+handles = anomaly_handles + regime_handles
+ax.legend(handles=handles, loc='upper left', fontsize='medium')
+
+plt.tight_layout()
 plt.show()
