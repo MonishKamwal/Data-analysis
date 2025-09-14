@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 import itertools
-
+import matplotlib.cm as cm
 # Thesis Timeframe
 start_date = pd.to_datetime('2003-01-01')
 end_date = pd.to_datetime('2014-05-31')
@@ -533,7 +533,7 @@ handles = anomaly_handles + regime_handles
 ax.legend(handles=handles, loc='upper left', fontsize='medium')
 
 plt.tight_layout()
-plt.show()
+#plt.show()
 
 # Distribution comparisons: Overlaid histograms by regime for each anomaly
 for anomaly in anomaly_cols:
@@ -546,4 +546,31 @@ for anomaly in anomaly_cols:
     plt.ylabel('Density')
     plt.legend(title='Regime')
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+
+# Summary visualization: Bar chart of mean returns by regime
+
+# Enhanced summary bar chart of mean returns by regime
+
+mean_returns = Excess_return_df.groupby('Regime')[anomaly_cols].mean().T
+fig, ax = plt.subplots(figsize=(13, 7))
+
+# Use pastel colors for bars
+bar_colors = [regime_colors.get(r, cm.Pastel1(i)) for i, r in enumerate(mean_returns.columns)]
+bars = mean_returns.plot(kind='bar', ax=ax, color=bar_colors, edgecolor='black', width=0.75)
+
+plt.title('Mean Returns by Regime for Each Anomaly', fontsize=18, fontweight='bold', pad=20)
+plt.xlabel('Anomaly', fontsize=14)
+plt.ylabel('Mean Return', fontsize=14)
+plt.grid(axis='y', linestyle='--', alpha=0.5)
+
+# Add value labels to each bar
+for container in ax.containers:
+    ax.bar_label(container, fmt='%.3f', label_type='edge', fontsize=12, padding=2)
+
+# Custom legend with larger font and better placement
+plt.legend(title='Regime', fontsize=13, title_fontsize=14, loc='lower right', frameon=True)
+plt.xticks(rotation=25, ha='right', fontsize=12)
+plt.yticks(fontsize=12)
+plt.tight_layout()
+plt.show()
