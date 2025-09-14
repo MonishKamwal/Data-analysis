@@ -47,37 +47,26 @@ for anomaly, file in files.items():
 columns_to_modify = list(files.keys())
 data.dropna(subset = columns_to_modify, inplace=True)
 data[columns_to_modify] = data[columns_to_modify]/ 100
-#print(data.head())
-#print(data.tail())
-#print(data.info())
 
 # Extract data within Regime Periods
 regime_data = data[(data['date'] >= start_date) & (data['date'] <= end_date)] 
-#print(regime_data.head())
-#print(regime_data.tail())
-#print(regime_data.info())
 
 # Fama-French Factors
-ff_factors = pd.read_csv('copy.csv')
+ff_factors = pd.read_csv('FF_Factors_clean.csv')
 col_ff = ff_factors.columns.to_list()
 col_ff[0] = 'date'
 ff_factors.columns = col_ff
 ff_factors['date'] = pd.to_datetime(ff_factors['date'], format='%Y%m')
-#print(ff_factors.head())
-#print(ff_factors.tail())
-#ff_factors.info()
+
 # Extract data within Thesis Timeframe
 modify_ff_cols = ['Mkt-RF', 'SMB', 'HML', 'RF']
 ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols].replace(-99.99, np.nan)
 ff_factors.dropna(subset=modify_ff_cols, inplace=True)
 ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols] / 100
 ff_factors = ff_factors[(ff_factors['date'] >= start_date) & (ff_factors['date'] <= end_date)] 
-#print(ff_factors.head())
-#print(ff_factors.tail())    
-#ff_factors.info()
+
 
 # Merge Regime Data with Fama-French Factors
-# Clean and efficient method
 def merge_by_month_year(df1, df2, date_col1='date', date_col2='date', how='inner'):
     # Create period columns
     df1 = df1.copy()
@@ -94,12 +83,7 @@ def merge_by_month_year(df1, df2, date_col1='date', date_col2='date', how='inner
     result = result.drop('_merge_key', axis=1)
     
     return result
-
-# Usage
 regime_ff_merged = merge_by_month_year(regime_data, ff_factors, how='left')
-#print(regime_ff_merged.head())
-#print(regime_ff_merged.tail())
-#print(regime_ff_merged.info())
 
 # Add 'Regime' column to regime_ff_merged
 def add_regime_column(df, regime_periods):
@@ -120,14 +104,11 @@ def add_regime_column(df, regime_periods):
 
 # Apply the function
 regime_ff_merged = add_regime_column(regime_ff_merged, regime_periods)
-#print(regime_ff_merged.head(15))
-#print(regime_ff_merged.tail(15))
-#print(regime_ff_merged.info())
 
 # Verify Regime Month Count 
 counts = regime_ff_merged['Regime'].value_counts()
-#print("Regime Month Counts:")
-#print(counts)
+print("\n\n=== Regime Month Counts===\n")
+print(counts)
 
 # NOTE: Missing values in Sample Period already verified earlier
 
@@ -148,21 +129,26 @@ def data_quality_summary(df):
     print(f"\nDuplicate Rows: {df.duplicated().sum()}")
     print(f"Unique Values per Column:")
     print(df.nunique().sort_values(ascending=False))
-
+#print("\n\n=== Data Quality Summary ===\n")
 #data_quality_summary(regime_ff_merged)
+
 
 # Mean Monthly Return by Regime
 anomaly_cols = list(files.keys())
 monthly_mean = regime_ff_merged.groupby('Regime')[anomaly_cols].mean().round(4)
-#print(monthly_mean) # NOTE: Multiply by 100 for % display
+print("\n\n=== Mean of Returns ===\n")
+print(monthly_mean) # NOTE: Multiply by 100 for % display
+
 
 # Standard Deviation of Monthly Returns by Regime
 monthly_std = regime_ff_merged.groupby('Regime')[anomaly_cols].std().round(4)
-#print(monthly_std) # NOTE: Multiply by 100 for % display
+print("\n\n=== Standard Deviation of Returns ===\n")
+print(monthly_std) # NOTE: Multiply by 100 for % display
 
 # Number of Observations by Regime
 monthly_count = regime_ff_merged.groupby('Regime')[anomaly_cols].count()
-#print(monthly_count) # NOTE: Should be 56, 19, 58 for each regime respectively
+print("\n\n=== Observations for Regimes ===\n")
+print(monthly_count) # NOTE: Should be 56, 19, 58 for each regime respectively
 
 # Calculate Excess Returns = anomaly Return - RF for Sharpe Ratio and Hit Rate
 Excess_return_df = regime_ff_merged.copy()
@@ -171,11 +157,9 @@ for anomaly in list(files.keys()):
     excess_col = anomaly + '_Excess'
     excess_return_cols.append(excess_col)
     Excess_return_df[excess_col] = Excess_return_df[anomaly] - Excess_return_df['RF']
-#print(excess_return_cols)
-#print(Excess_return_df.head())
-#print(Excess_return_df.tail())
-#print(Excess_return_df.info())
-
+print("\n\n=== Data with Anomalies, FF Factors, Regime Classification and Excess Returns===\n")
+print(Excess_return_df.head())
+print(Excess_return_df.info())
 # Calculate Sharpe Ratio for each anomaly
 sharpe_ratios = {}
 for anomaly in excess_return_cols:
@@ -194,7 +178,8 @@ def create_sharpe_dataframe(sharpe_dict):
     return sharpe_df
 
 sharpe_df = create_sharpe_dataframe(sharpe_ratios)
-#print(sharpe_df)
+print("\n\n=== Sharpe Ratios By Anomaly (using Excess Returns)===\n")
+print(sharpe_df)
 
 # Sharpe Ratios by Regime and Anomaly
 def calculate_regime_sharpe_ratios(df):
@@ -214,11 +199,10 @@ def calculate_regime_sharpe_ratios(df):
         regime_sharpe[regime] = sharpe_ratios
     
     return pd.DataFrame(regime_sharpe).T
-
 # Result format: 3×6 table (regimes × anomalies)
 regime_sharpe_table = calculate_regime_sharpe_ratios(Excess_return_df)
-#print("Sharpe Ratios by Regime and Anomaly:")
-#print(regime_sharpe_table.round(4))
+print("\n\n=== Sharpe Ratios by Anomaly and Regimes (using Excess Returns) ===\n")
+print(regime_sharpe_table.round(4))
 
 
 # Calculate Hit Rate for each anomaly
@@ -229,15 +213,13 @@ def quick_hit_percentage(df, column):
 
 hit_rates_excess = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in excess_return_cols}
 hit_rate_excess_df = pd.DataFrame(list(hit_rates_excess.items()), columns=['Anomaly Excess', 'Hit_Rate'])
-#hit_rate_excess_df.info()
-#print("Hit Rates for Each Anomaly based on Excess Returns:")
-#print(hit_rate_excess_df, end='\n\n')
+print("\n\n===Hit Rates for Each Anomaly based on Excess Returns===\n")
+print(hit_rate_excess_df, end='\n\n')
 
 hit_rates = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in anomaly_cols}
 hit_rate_df = pd.DataFrame(list(hit_rates.items()), columns=['Anomaly', 'Hit_Rate'])
-#hit_rate_df.info()
-#print("Hit Rates for Each Anomaly:")
-#print(hit_rate_df)
+print("\n\n===Hit Rates for Each Anomaly based on Returns===\n")
+print(hit_rate_df)
 
 # Newey-West HAC Standard Errors and t-statistics
 def newey_west_variance(returns, lags=12):
@@ -382,7 +364,8 @@ def create_t_statistics_dataframe(results_dict):
 t_stats_results = calculate_t_stats_for_strategies(Excess_return_df, excess_return_cols, lags=12)
 
 # Display results
-#display_t_statistics(t_stats_results)
+print("\n\n===Newey-West T-Statistics===\n")
+display_t_statistics(t_stats_results)
 
 # Create DataFrame for further analysis
 t_stats_df = create_t_statistics_dataframe(t_stats_results)
@@ -396,15 +379,7 @@ t_stats_df = create_t_statistics_dataframe(t_stats_results)
 # Regime Comparison Test - Welch's T-test
 pre_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Pre-Crisis']
 crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Crisis']
-post_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Post-Crisis']
-
-#pre_crisis_returns.info()
-#crisis_returns.info()
-#post_crisis_returns.info()
-
-#print(pre_crisis_returns.head())
-#print(crisis_returns.head())
-#print(post_crisis_returns.head())   
+post_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Post-Crisis'] 
 
 t_test_results_pre_crisis_vs_crisis = {}
 t_test_results_crisis_vs_post_crisis = {}
@@ -457,16 +432,18 @@ def display_welchs_t_test_results(results_dict, group1_name, group2_name):
     print("-" * 80)
     print("Significance levels: *** p<0.01, ** p<0.05, * p<0.10")
     print("=" * 80)
-#display_welchs_t_test_results(t_test_results_pre_crisis_vs_crisis, 'Pre-Crisis', 'Crisis')
-#display_welchs_t_test_results(t_test_results_crisis_vs_post_crisis, 'Crisis', 'Post-Crisis')
+print("\n\n===Welch's T-Test: Pre-Crisis v/s Crisis===\n")
+display_welchs_t_test_results(t_test_results_pre_crisis_vs_crisis, 'Pre-Crisis', 'Crisis')
+print("\n\n===Welch's T-Test: Crisis v/s Post-Crisis===\n")
+display_welchs_t_test_results(t_test_results_crisis_vs_post_crisis, 'Crisis', 'Post-Crisis')
 
 # Calculate and print 'Crisis Drop' = Mean(Crisis) - Mean(Pre-Crisis)
-print("\nCrisis Drop (Mean Crisis - Mean Pre-Crisis):")
 drop_results = {}
 for strategy, results in t_test_results_pre_crisis_vs_crisis.items():
     drop = results['mean_group2'] - results['mean_group1']
     drop_results[strategy] = drop
 # print drop_resutls in a formatted way
+print("\n\n===Crisis Drop: Crisis v/s Pre-Crisis===\n")
 print(f"{'Strategy':<25} {'Crisis Drop':<15}")
 print("-" * 40)
 for strategy, drop in drop_results.items():
@@ -487,18 +464,17 @@ for strategy, results in t_test_results_pre_crisis_vs_crisis.items():
         recovery_rate = np.nan  # Avoid division by zero
     
     recovery_results[strategy] = recovery_rate
-# print recovery_results in a formatted way
-"""
+print("\n\n===Recovery Rate (%): Post-Crisis v/s Crisis===\n")
+#print recovery_results in a formatted way
 print(f"{'Strategy':<25} {'Recovery Rate (%)':<20}")
 print("-" * 45)
 for strategy, rate in recovery_results.items():
     print(f"{strategy:<25} {rate:<20.2f}")
 print("-" * 45) 
-"""
 
-# Visualizations
+# ***************** Visualizations ************************
+
 # Visualization for each anomaly with regime shading
-
 regime_colors = {
     'Pre-Crisis': '#e0e0e0',
     'Crisis': '#ffcccc',
@@ -506,7 +482,7 @@ regime_colors = {
 }
 
 # Plot all anomalies as base 100 index on one graph
-
+print("\n\n===Time series plots: Cumulative long-short returns (base=100) with regime shading===\n")
 fig, ax = plt.subplots(figsize=(14, 6))
 color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
 anomaly_colors = {anomaly: next(color_cycle) for anomaly in anomaly_cols}
@@ -536,6 +512,7 @@ plt.tight_layout()
 #plt.show()
 
 # Distribution comparisons: Overlaid histograms by regime for each anomaly
+print("\n\n===Distribution comparisons: Overlaid histograms by regime for each anomaly===\n")
 for anomaly in anomaly_cols:
     plt.figure(figsize=(10, 6))
     for regime, color in regime_colors.items():
@@ -549,8 +526,7 @@ for anomaly in anomaly_cols:
     #plt.show()
 
 # Summary visualization: Bar chart of mean returns by regime
-
-# Enhanced summary bar chart of mean returns by regime
+print("\n\n===Summary visualization: Bar chart of mean returns by regime===\n")
 
 mean_returns = Excess_return_df.groupby('Regime')[anomaly_cols].mean().T
 fig, ax = plt.subplots(figsize=(13, 7))
@@ -574,3 +550,19 @@ plt.xticks(rotation=25, ha='right', fontsize=12)
 plt.yticks(fontsize=12)
 plt.tight_layout()
 plt.show()
+
+# TODO: Genereate LaTex Report
+
+# Save as excel
+ff_factors.to_excel('Excel/Fama_French_Factors_Clean.csv')
+monthly_mean.to_excel('Excel/Mean_Monthly_Return')
+monthly_std.to_excel('Excel/Standard_Deviation_Monthly')
+monthly_count.to_excel('Excel/Observation_Count_For_Regimes')
+Excess_return_df.to_excel('Excel/Final_Data_With_Anomalies_FFFactors_Regimes_ExcessReturns')
+sharpe_df.to_excel('Excel/Sharpe_Ratio_Returns')
+regime_sharpe_table.to_excel('Excel/Sharpe_Ratio_Excess_Returns')
+hit_rate_df.to_excel('Excel/Hit_Rate_Returns')
+hit_rate_excess_df.to_excel('Excel/Hit_Rate_Excess_Returns')
+t_stats_df.to_excel('Excel/Newey_West_T_Statistics')
+# NOTE: Welch's Test (Both), Crisis Drop and Recovery Rate not saved as excel
+
