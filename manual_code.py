@@ -4,6 +4,8 @@ from scipy import stats
 from datetime import datetime
 import matplotlib.pyplot as plt 
 import matplotlib.patches as mpatches
+import seaborn as sns
+import itertools
 
 # Thesis Timeframe
 start_date = pd.to_datetime('2003-01-01')
@@ -504,7 +506,7 @@ regime_colors = {
 }
 
 # Plot all anomalies as base 100 index on one graph
-import itertools
+
 fig, ax = plt.subplots(figsize=(14, 6))
 color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
 anomaly_colors = {anomaly: next(color_cycle) for anomaly in anomaly_cols}
@@ -532,3 +534,16 @@ ax.legend(handles=handles, loc='upper left', fontsize='medium')
 
 plt.tight_layout()
 plt.show()
+
+# Distribution comparisons: Overlaid histograms by regime for each anomaly
+for anomaly in anomaly_cols:
+    plt.figure(figsize=(10, 6))
+    for regime, color in regime_colors.items():
+        subset = Excess_return_df[Excess_return_df['Regime'] == regime][anomaly].dropna()
+        sns.histplot(subset, kde=False, color=color, label=regime, stat='density', alpha=0.5, bins=20)
+    plt.title(f'Distribution of {anomaly} Returns by Regime')
+    plt.xlabel('Return')
+    plt.ylabel('Density')
+    plt.legend(title='Regime')
+    plt.tight_layout()
+    plt.show()
