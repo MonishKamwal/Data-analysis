@@ -147,6 +147,7 @@ def data_quality_summary(df):
     print(df.nunique().sort_values(ascending=False))
 
 #data_quality_summary(regime_ff_merged)
+data_quality_summary(regime_ff_merged)
 
 # Mean Monthly Return by Regime
 anomaly_cols = list(files.keys())
@@ -192,3 +193,203 @@ def create_sharpe_dataframe(sharpe_dict):
 
 sharpe_df = create_sharpe_dataframe(sharpe_ratios)
 print(sharpe_df)
+
+# Sharpe Ratios by Regime and Anomaly
+def calculate_regime_sharpe_ratios(df):
+    """Calculate Sharpe ratios by regime and anomaly"""
+    regime_sharpe = {}
+    
+    for regime in df['Regime'].unique():
+        regime_data = df[df['Regime'] == regime]
+        sharpe_ratios = {}
+        
+        for col in excess_return_cols:
+            mean_return = regime_data[col].mean()
+            std_return = regime_data[col].std()
+            sharpe_ratio = mean_return  / std_return
+            sharpe_ratios[col] = sharpe_ratio
+        
+        regime_sharpe[regime] = sharpe_ratios
+    
+    return pd.DataFrame(regime_sharpe).T
+
+# Result format: 3×6 table (regimes × anomalies)
+regime_sharpe_table = calculate_regime_sharpe_ratios(Excess_return_df)
+print("Sharpe Ratios by Regime and Anomaly:")
+print(regime_sharpe_table.round(4))
+
+
+# Calculate Hit Rate for each anomaly
+def quick_hit_percentage(df, column):
+    """Quick calculation of hit percentage for a single column"""
+    returns = df[column].dropna()
+    return (returns > 0).mean() * 100
+
+hit_rates_excess = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in excess_return_cols}
+hit_rate_excess_df = pd.DataFrame(list(hit_rates_excess.items()), columns=['Anomaly Excess', 'Hit_Rate'])
+hit_rate_excess_df.info()
+print("Hit Rates for Each Anomaly based on Excess Returns:")
+print(hit_rate_excess_df, end='\n\n')
+
+hit_rates = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in anomaly_cols}
+hit_rate_df = pd.DataFrame(list(hit_rates.items()), columns=['Anomaly', 'Hit_Rate'])
+hit_rate_df.info()
+print("Hit Rates for Each Anomaly:")
+print(hit_rate_df)
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+# Newey-West HAC Standard Errors and t-statistics
+def newey_west_variance(returns, lags=12):
+    returns = np.array(returns)
+    n = len(returns)
+    # Demean the returns
+    mean_return = np.mean(returns)
+    demeaned_returns = returns - mean_return
+    # Calculate gamma_0 (variance)
+    gamma_0 = np.mean(demeaned_returns**2)
+    # Calculate autocovariances gamma_j for j = 1, 2, ..., lags
+    gamma_j_sum = 0
+    for j in range(1, lags + 1):
+        if j < n:
+            # Calculate gamma_j
+            gamma_j = np.mean(demeaned_returns[j:] * demeaned_returns[:-j])
+            # Bartlett kernel weight: w_j = 1 - j/(lags+1)
+            weight = 1 - j / (lags + 1)
+            gamma_j_sum += 2 * weight * gamma_j
+    # Newey-West variance estimator
+    nw_variance = (gamma_0 + gamma_j_sum) / n
+    return nw_variance
+
+def calculate_newey_west_t_stat(returns, lags=12):
+    returns = np.array(returns)
+    returns = returns[~np.isnan(returns)]  # Remove NaN values
+    n = len(returns)
+    if n == 0:
+        return {
+            'mean': np.nan,
+            't_statistic': np.nan,
+            'p_value': np.nan,
+            'nw_std_error': np.nan,
+            'observations': 0,
+            'lags_used': lags
+        }
+    # Calculate sample mean
+    mean_return = np.mean(returns)
+    # Calculate Newey-West variance
+    nw_variance = newey_west_variance(returns, lags)
+    nw_std_error = np.sqrt(nw_variance)
+    # Calculate t-statistic
+    t_statistic = mean_return / nw_std_error if nw_std_error != 0 else np.nan
+    # Calculate p-value (two-tailed test)
+    # Use t-distribution with n-1 degrees of freedom
+    if not np.isnan(t_statistic):
+        p_value = 2 * (1 - stats.t.cdf(abs(t_statistic), df=n-1))
+    else:
+        p_value = np.nan
+    return {
+        'mean': mean_return,
+        't_statistic': t_statistic,
+        'p_value': p_value,
+        'nw_std_error': nw_std_error,
+        'observations': n,
+        'lags_used': lags
+    }
+
+def calculate_t_stats_for_strategies(df, columns, lags=12):
+    results = {}
+    for column in columns:
+        results[column] = calculate_newey_west_t_stat(df[column], lags)
+    return results
+
+def display_t_statistics(results_dict):
+    """Display t-statistics in a formatted table"""
+    print("=" * 80)
+    print("NEWEY-WEST HAC t-STATISTICS (H0: Mean = 0)")
+    print("=" * 80)
+    print(f"{'Strategy':<25} {'Mean':<10} {'t-stat':<10} {'p-value':<12} {'Significant':<12}")
+    print("-" * 80)
+    # Sort by absolute t-statistic (descending)
+    sorted_strategies = sorted(results_dict.items(), 
+                             key=lambda x: abs(x[1]['t_statistic']) if not np.isnan(x[1]['t_statistic']) else -1, 
+                             reverse=True)
+    
+    for strategy, results in sorted_strategies:
+        strategy_name = strategy.replace('_Excess', '')  # Clean name for display
+        mean_val = results['mean']
+        t_stat = results['t_statistic']
+        p_val = results['p_value']
+        
+        # Determine significance
+        if not np.isnan(p_val):
+            if p_val < 0.01:
+                significance = "***"
+            elif p_val < 0.05:
+                significance = "**"
+            elif p_val < 0.10:
+                significance = "*"
+            else:
+                significance = ""
+        else:
+            significance = "N/A"
+        
+        if not any(np.isnan([mean_val, t_stat, p_val])):
+            print(f"{strategy_name:<25} {mean_val:<10.4f} {t_stat:<10.3f} {p_val:<12.4f} {significance:<12}")
+        else:
+            print(f"{strategy_name:<25} {'N/A':<10} {'N/A':<10} {'N/A':<12} {'N/A':<12}")
+    
+    print("-" * 80)
+    print("Significance levels: *** p<0.01, ** p<0.05, * p<0.10")
+    print(f"Newey-West lags used: {list(results_dict.values())[0]['lags_used']}")
+    print("=" * 80)
+
+def create_t_statistics_dataframe(results_dict):
+    """Convert t-statistics results to DataFrame"""
+    data = []
+    for strategy, results in results_dict.items():
+        strategy_name = strategy.replace('_Excess', '')
+        
+        # Determine significance level
+        p_val = results['p_value']
+        if not np.isnan(p_val):
+            if p_val < 0.01:
+                sig_level = "***"
+            elif p_val < 0.05:
+                sig_level = "**"
+            elif p_val < 0.10:
+                sig_level = "*"
+            else:
+                sig_level = ""
+        else:
+            sig_level = "N/A"
+        
+        data.append({
+            'Strategy': strategy_name,
+            'Mean': results['mean'],
+            'T_Statistic': results['t_statistic'],
+            'P_Value': results['p_value'],
+            'NW_Std_Error': results['nw_std_error'],
+            'Observations': results['observations'],
+            'Significance': sig_level
+        })
+    
+    t_stats_df = pd.DataFrame(data)
+    t_stats_df = t_stats_df.sort_values('T_Statistic', key=abs, ascending=False, na_position='last')
+    return t_stats_df
+
+
+# Calculate Newey-West t-statistics
+t_stats_results = calculate_t_stats_for_strategies(Excess_return_df, excess_return_cols, lags=12)
+
+# Display results
+display_t_statistics(t_stats_results)
+
+# Create DataFrame for further analysis
+t_stats_df = create_t_statistics_dataframe(t_stats_results)
+print("\nDataFrame format:")
+print(t_stats_df)
+# NOTE: Cross checked the results of the t-statistics with Claude. It was suspicious at first but after reveiwing the data it said it might actually be correct
+# Save to CSV if needed
+#t_stats_df.to_csv('newey_west_t_statistics.csv', index=False)
