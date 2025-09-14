@@ -3,6 +3,7 @@ import numpy as np
 from scipy import stats
 from datetime import datetime
 import matplotlib.pyplot as plt 
+import matplotlib.patches as mpatches
 
 # Thesis Timeframe
 start_date = pd.to_datetime('2003-01-01')
@@ -469,3 +470,52 @@ print("-" * 40)
 for strategy, drop in drop_results.items():
     print(f"{strategy:<25} {drop:<15.4f}")
 print("-" * 40) 
+
+# Calculate Recovery Rate = (Post-Crisis Mean - Crisis Mean)* 100 / (Pre-Crisis Mean - Crisis Mean) (From drop_results)
+print("\nRecovery Rate (%):")
+recovery_results = {}
+for strategy, results in t_test_results_pre_crisis_vs_crisis.items():
+    pre_crisis_mean = results['mean_group1']
+    crisis_mean = results['mean_group2']
+    post_crisis_mean = t_test_results_crisis_vs_post_crisis[strategy]['mean_group2']
+    
+    if (pre_crisis_mean - crisis_mean) != 0:
+        recovery_rate = ((post_crisis_mean - crisis_mean) * 100) / (pre_crisis_mean - crisis_mean)
+    else:
+        recovery_rate = np.nan  # Avoid division by zero
+    
+    recovery_results[strategy] = recovery_rate
+# print recovery_results in a formatted way
+"""
+print(f"{'Strategy':<25} {'Recovery Rate (%)':<20}")
+print("-" * 45)
+for strategy, rate in recovery_results.items():
+    print(f"{strategy:<25} {rate:<20.2f}")
+print("-" * 45) 
+"""
+
+# Visualizations
+# Visualization for each anomaly with regime shading
+
+regime_colors = {
+    'Pre-Crisis': '#e0e0e0',
+    'Crisis': '#ffcccc',
+    'Post-Crisis': '#ccffcc'
+}
+
+for anomaly in anomaly_cols:
+    plt.figure(figsize=(12, 6))
+    plt.plot(Excess_return_df['date'], Excess_return_df[anomaly], label=anomaly, color='blue')
+    for regime, (start, end) in regime_periods.items():
+        start_dt = pd.to_datetime(start)
+        end_dt = pd.to_datetime(end)
+        plt.axvspan(start_dt, end_dt, color=regime_colors[regime], alpha=0.3, label=regime)
+    plt.title(f'{anomaly} Long-Short Returns Over Time with Regime Shading')
+    plt.xlabel('Date')
+    plt.ylabel('Return')
+    handles = [mpatches.Patch(color=regime_colors[r], label=r) for r in regime_colors]
+    handles.append(plt.Line2D([], [], color='blue', label=anomaly))
+    plt.legend(handles=handles)
+    plt.tight_layout()
+
+plt.show()
