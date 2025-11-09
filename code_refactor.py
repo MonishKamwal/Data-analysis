@@ -52,7 +52,7 @@ data[columns_to_modify] = data[columns_to_modify]/ 100
 regime_data = data[(data['date'] >= start_date) & (data['date'] <= end_date)] 
 
 
-
+"""
 # Fama-French Factors
 ff_factors = pd.read_csv('FF_Factors_clean.csv')
 col_ff = ff_factors.columns.to_list()
@@ -564,7 +564,7 @@ plt.tight_layout()
 plt.show()
 
 # TODO: Genereate LaTex Report
-
+"""
 # Save as excel
 """
 ff_factors.to_excel('Excel/Fama_French_Factors_Clean.xlsx')
