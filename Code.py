@@ -5,22 +5,21 @@ from datetime import datetime
 import matplotlib.pyplot as plt 
 import matplotlib.patches as mpatches
 import seaborn as sns
-import itertools
 import matplotlib.cm as cm
-# Thesis Timeframe
+
+#Thesis Timeframe
 start_date = pd.to_datetime('2003-01-01')
 end_date = pd.to_datetime('2014-05-31')
 
-# Regime Periods
-# Regime classification
+#Regime classification 
 regime_periods = {
     'Pre-Crisis': ('2003-01-01', '2007-11-30'),
     'Crisis': ('2007-12-01', '2009-06-30'),
     'Post-Crisis': ('2009-07-01', '2014-05-31')
 }
 
-# Files
-files = {
+#Files to Load
+files_to_load = {
     'Accruals' : 'Accruals.csv',
     'Assest Growth': 'AssetGrowth.csv',
     'BM': 'BM.csv',
@@ -28,194 +27,73 @@ files = {
     'Momentum': 'Mom12m.csv',
     'Leaverage Ret': 'Leverage_ret.csv',
 }
-#print()
-data = pd.DataFrame()
-for anomaly, file in files.items():
-    df = pd.read_csv(file)
-    columns = df.columns.to_list()
-    df = df[['date', 'portLS']]
-    df['date'] = pd.to_datetime(df['date'], format='mixed')
-    df.rename(columns={'portLS':anomaly}, inplace=True)
-    df = df.dropna(subset=[anomaly])
-    if data.empty:
-        data = df
-    else:
-        data = pd.merge(data, df, on='date', how='outer')
-    #df.info()
-    #df.head()
-    #print('\n \n')
-columns_to_modify = list(files.keys())
-data.dropna(subset = columns_to_modify, inplace=True)
-data[columns_to_modify] = data[columns_to_modify]/ 100
+anomaly_cols = list(files_to_load.keys())
 
-# Extract data within Regime Periods
-regime_data = data[(data['date'] >= start_date) & (data['date'] <= end_date)] 
+ff_factors_file = 'FF_Factors_clean.csv'
 
+# Load all anomaly data into a single DataFrame
+def load_data(files):
+    data = pd.DataFrame()
+    for anomaly, file in files.items():
+        df = pd.read_csv(file)
+        #columns = df.columns.to_list()
+        df = df[['date', 'portLS']]
+        df['date'] = pd.to_datetime(df['date'], format='mixed')
+        df.rename(columns={'portLS':anomaly}, inplace=True)
+        df = df.dropna(subset=[anomaly])
+        if data.empty:
+            data = df
+        else:
+            data = pd.merge(data, df, on='date', how='outer')
+    columns_to_modify = list(files.keys())
+    data.dropna(subset = columns_to_modify, inplace=True)
+    data[columns_to_modify] = data[columns_to_modify]/ 100
+    return data
 
+# Add Fama-French Factors to data
+def load_fama_french_factors_to_data(file, data, start_date, end_date):
+    # Fama-French Factors
+    ff_factors = pd.read_csv(file)
+    col_ff = ff_factors.columns.to_list()
+    col_ff[0] = 'date'
+    ff_factors.columns = col_ff
+    ff_factors['date'] = pd.to_datetime(ff_factors['date'], format='%Y%m')
 
-# Fama-French Factors
-ff_factors = pd.read_csv('FF_Factors_clean.csv')
-col_ff = ff_factors.columns.to_list()
-col_ff[0] = 'date'
-ff_factors.columns = col_ff
-ff_factors['date'] = pd.to_datetime(ff_factors['date'], format='%Y%m')
+    # Extract data within Thesis Timeframe
+    modify_ff_cols = ['Mkt-RF', 'SMB', 'HML', 'RF']
+    ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols].replace(-99.99, np.nan)
+    ff_factors.dropna(subset=modify_ff_cols, inplace=True)
+    ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols] / 100
+    ff_factors = ff_factors[(ff_factors['date'] >= start_date) & (ff_factors['date'] <= end_date)] 
 
-# Extract data within Thesis Timeframe
-modify_ff_cols = ['Mkt-RF', 'SMB', 'HML', 'RF']
-ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols].replace(-99.99, np.nan)
-ff_factors.dropna(subset=modify_ff_cols, inplace=True)
-ff_factors[modify_ff_cols] = ff_factors[modify_ff_cols] / 100
-ff_factors = ff_factors[(ff_factors['date'] >= start_date) & (ff_factors['date'] <= end_date)] 
+    # Merge with anomaly data
+    data['_merge_key'] = data['date'].dt.to_period('M')
+    ff_factors['_merge_key'] = ff_factors['date'].dt.to_period('M')
+    merged_data = pd.merge(data, ff_factors, on='_merge_key', how='inner')
+    merged_data.drop('_merge_key', axis=1, inplace=True)
+    merged_data.drop('date_y', axis=1, inplace=True)
+    merged_data.rename(columns={'date_x':'date'}, inplace=True)
+    return merged_data
 
-
-# Merge Regime Data with Fama-French Factors
-def merge_by_month_year(df1, df2, date_col1='date', date_col2='date', how='inner'):
-    # Create period columns
-    df1 = df1.copy()
-    df2 = df2.copy()
-    
-    df1['_merge_key'] = df1[date_col1].dt.to_period('M')
-    df2['_merge_key'] = df2[date_col2].dt.to_period('M')
-    df2 = df2.drop(date_col2, axis=1)  # Drop original date column to avoid duplication
-    
-    # Merge
-    result = pd.merge(df1, df2, on='_merge_key', how=how)
-    
-    # Clean up
-    result = result.drop('_merge_key', axis=1)
-    
-    return result
-regime_ff_merged = merge_by_month_year(regime_data, ff_factors, how='left')
-
-# Add 'Regime' column to regime_ff_merged
+# Add 'Regime' column
 def add_regime_column(df, regime_periods):
-
-    #Add Regime column using simple loop logic
-
     df = df.copy()  # Avoid SettingWithCopyWarning
     df['Regime'] = None  # Default value
-    
     for regime, (start_date, end_date) in regime_periods.items():
         start_dt = pd.to_datetime(start_date)
         end_dt = pd.to_datetime(end_date)
-        
         mask = (df['date'] >= start_dt) & (df['date'] <= end_dt)
         df.loc[mask, 'Regime'] = regime
-    
     return df
 
-# Apply the function
-regime_ff_merged = add_regime_column(regime_ff_merged, regime_periods)
-
-# Verify Regime Month Count 
-counts = regime_ff_merged['Regime'].value_counts()
-print("\n\n=== Regime Month Counts===\n")
-print(counts)
-
-# NOTE: Missing values in Sample Period already verified earlier
-
-# NOTE: Date alignment between factors and anomalies already verified earlier
-
-# Data Quality Assurance for Appendix
-def data_quality_summary(df):
-
-#    Quick data quality overview
-
-    print(f"Dataset Shape: {df.shape}")
-    print(f"Memory Usage: {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
-    print("\nData Types:")
-    print(df.dtypes.value_counts())
-    print("\nMissing Values:")
-    missing = df.isnull().sum()
-    print(missing[missing > 0].sort_values(ascending=False))
-    print(f"\nDuplicate Rows: {df.duplicated().sum()}")
-    print(f"Unique Values per Column:")
-    print(df.nunique().sort_values(ascending=False))
-#print("\n\n=== Data Quality Summary ===\n")
-#data_quality_summary(regime_ff_merged)
-
-
-# Mean Monthly Return by Regime
-anomaly_cols = list(files.keys())
-monthly_mean = regime_ff_merged.groupby('Regime')[anomaly_cols].mean().round(4)
-print("\n\n=== Mean of Returns ===\n")
-print(monthly_mean) # NOTE: Multiply by 100 for % display
-
-
-# Standard Deviation of Monthly Returns by Regime
-monthly_std = regime_ff_merged.groupby('Regime')[anomaly_cols].std().round(4)
-print("\n\n=== Standard Deviation of Returns ===\n")
-print(monthly_std) # NOTE: Multiply by 100 for % display
-
-# Number of Observations by Regime
-monthly_count = regime_ff_merged.groupby('Regime')[anomaly_cols].count()
-print("\n\n=== Observations for Regimes ===\n")
-print(monthly_count) # NOTE: Should be 56, 19, 58 for each regime respectively
-
-# Skewness by Regime
-monthly_skew = regime_ff_merged.groupby('Regime')[anomaly_cols].skew().round(4)
-print("\n\n=== Skewness of Returns ===\n")
-print(monthly_skew)
-
-# Kurtosis by Regime
-monthly_kurt = regime_ff_merged.groupby('Regime')[anomaly_cols].apply(lambda x: x.kurtosis()).round(4)
-print("\n\n=== Fischer's Kurtosis of Returns ===\n")
-print(monthly_kurt)
-
-# Calculate Excess Returns = anomaly Return - RF for Sharpe Ratio and Hit Rate
-Excess_return_df = regime_ff_merged.copy()
-excess_return_cols = []
-for anomaly in list(files.keys()):
-    excess_col = anomaly + '_Excess'
-    excess_return_cols.append(excess_col)
-    Excess_return_df[excess_col] = Excess_return_df[anomaly] - Excess_return_df['RF']
-print("\n\n=== Data with Anomalies, FF Factors, Regime Classification and Excess Returns===\n")
-print(Excess_return_df.head())
-print(Excess_return_df.info())
-# Calculate Sharpe Ratio for each anomaly
-sharpe_ratios = {}
-for anomaly in excess_return_cols:
-    mean_excess = Excess_return_df[anomaly].mean()
-    std_excess = Excess_return_df[anomaly].std()
-    if std_excess == 0:
-        sharpe_ratio = np.nan  # Avoid division by zero
-    sharpe_ratio = (mean_excess / std_excess) * np.sqrt(12)  # Annualized Sharpe Ratio
-    sharpe_ratios[anomaly] = round(sharpe_ratio, 4)
-
-# Create a DataFrame for easy viewing and export
-def create_sharpe_dataframe(sharpe_dict):
-    #Convert Sharpe ratios to DataFrame for easy manipulation
-    sharpe_df = pd.DataFrame(list(sharpe_dict.items()), columns=['Anomaly', 'Sharpe_Ratio'])
-    sharpe_df = sharpe_df.sort_values('Sharpe_Ratio', ascending=False, na_position='last')
-    return sharpe_df
-
-sharpe_df = create_sharpe_dataframe(sharpe_ratios)
-print("\n\n=== Sharpe Ratios By Anomaly (using Excess Returns)===\n")
-print(sharpe_df)
-
-# Sharpe Ratios by Regime and Anomaly
-def calculate_regime_sharpe_ratios(df):
-    #Calculate Sharpe ratios by regime and anomaly
-    regime_sharpe = {}
-    
-    for regime in df['Regime'].unique():
-        regime_data = df[df['Regime'] == regime]
-        sharpe_ratios = {}
-        
-        for col in excess_return_cols:
-            mean_return = regime_data[col].mean()
-            std_return = regime_data[col].std()
-            sharpe_ratio = mean_return  / std_return
-            sharpe_ratios[col] = sharpe_ratio
-        
-        regime_sharpe[regime] = sharpe_ratios
-    
-    return pd.DataFrame(regime_sharpe).T
-# Result format: 3×6 table (regimes × anomalies)
-regime_sharpe_table = calculate_regime_sharpe_ratios(Excess_return_df)
-print("\n\n=== Sharpe Ratios by Anomaly and Regimes (using Excess Returns) ===\n")
-print(regime_sharpe_table.round(4))
-
+def calculate_excess_returns(df, anomaly_cols):
+    excess_returns = pd.DataFrame()
+    for col in anomaly_cols:
+        excess_returns[col] = df[col] - df['RF']
+    excess_returns['date'] = df['date']
+    excess_returns['Regime'] = df['Regime']
+    excess_returns.set_index('date', inplace=True)
+    return excess_returns
 
 # Calculate Hit Rate for each anomaly
 def quick_hit_percentage(df, column):
@@ -223,17 +101,40 @@ def quick_hit_percentage(df, column):
     returns = df[column].dropna()
     return (returns > 0).mean() * 100
 
-hit_rates_excess = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in excess_return_cols}
-hit_rate_excess_df = pd.DataFrame(list(hit_rates_excess.items()), columns=['Anomaly Excess', 'Hit_Rate'])
-print("\n\n===Hit Rates for Each Anomaly based on Excess Returns===\n")
-print(hit_rate_excess_df, end='\n\n')
+def calculate_hit_precentage_by_regime(df, anomaly_cols):
+    #Calculate hit percentage by regime for excess returns
+    hit_rates = {}
+    for regime in df['Regime'].unique():
+        regime_data = df[df['Regime'] == regime]
+        regime_hit_rates = {}
+        for col in anomaly_cols:
+            hit_rate = quick_hit_percentage(regime_data, col)
+            regime_hit_rates[col] = hit_rate
+        hit_rates[regime] = regime_hit_rates
+    return pd.DataFrame(hit_rates).T
 
-hit_rates = {anomaly: quick_hit_percentage(Excess_return_df, anomaly) for anomaly in anomaly_cols}
-hit_rate_df = pd.DataFrame(list(hit_rates.items()), columns=['Anomaly', 'Hit_Rate'])
-print("\n\n===Hit Rates for Each Anomaly based on Returns===\n")
-print(hit_rate_df)
+# Sharpe Ratios by Regime and Anomaly
+def calculate_regime_sharpe_ratios(df, anomaly_cols):
+    #Calculate Sharpe ratios by regime and anomaly
+    regime_sharpe = {}
+    for regime in df['Regime'].unique():
+        regime_data = df[df['Regime'] == regime]
+        sharpe_ratios = {}
+        
+        for col in anomaly_cols:
+            mean_return = regime_data[col].mean()
+            std_return = regime_data[col].std()
+            if std_return == 0:
+                sharpe_ratio = np.nan  # Avoid division by zero
+            else:
+                sharpe_ratio = (mean_return  / std_return) * np.sqrt(12)  # Annualized Sharpe Ratio
+            sharpe_ratios[col] = round(sharpe_ratio, 4)
+        
+        regime_sharpe[regime] = sharpe_ratios
+    
+    return pd.DataFrame(regime_sharpe).T
 
-# Newey-West HAC Standard Errors and t-statistics
+# HELPER FUNCTION: Newey-West HAC Standard Errors and t-statistics
 def newey_west_variance(returns, lags=12):
     returns = np.array(returns)
     n = len(returns)
@@ -255,6 +156,7 @@ def newey_west_variance(returns, lags=12):
     nw_variance = (gamma_0 + gamma_j_sum) / n
     return nw_variance
 
+# HELPER FUNCTION: Calculate Newey-West t-statistic for each anomaly
 def calculate_newey_west_t_stat(returns, lags=12):
     returns = np.array(returns)
     returns = returns[~np.isnan(returns)]  # Remove NaN values
@@ -290,59 +192,13 @@ def calculate_newey_west_t_stat(returns, lags=12):
         'lags_used': lags
     }
 
-def calculate_t_stats_for_strategies(df, columns, lags=12):
-    results = {}
-    for column in columns:
-        results[column] = calculate_newey_west_t_stat(df[column], lags)
-    return results
-
-def display_t_statistics(results_dict):
-    #Display t-statistics in a formatted table
-    print("=" * 80)
-    print("NEWEY-WEST HAC t-STATISTICS (H0: Mean = 0)")
-    print("=" * 80)
-    print(f"{'Strategy':<25} {'Mean':<10} {'t-stat':<10} {'p-value':<12} {'Significant':<12}")
-    print("-" * 80)
-    # Sort by absolute t-statistic (descending)
-    sorted_strategies = sorted(results_dict.items(), 
-                             key=lambda x: abs(x[1]['t_statistic']) if not np.isnan(x[1]['t_statistic']) else -1, 
-                             reverse=True)
-    
-    for strategy, results in sorted_strategies:
-        strategy_name = strategy.replace('_Excess', '')  # Clean name for display
-        mean_val = results['mean']
-        t_stat = results['t_statistic']
-        p_val = results['p_value']
-        
-        # Determine significance
-        if not np.isnan(p_val):
-            if p_val < 0.01:
-                significance = "***"
-            elif p_val < 0.05:
-                significance = "**"
-            elif p_val < 0.10:
-                significance = "*"
-            else:
-                significance = ""
-        else:
-            significance = "N/A"
-        
-        if not any(np.isnan([mean_val, t_stat, p_val])):
-            print(f"{strategy_name:<25} {mean_val:<10.4f} {t_stat:<10.3f} {p_val:<12.4f} {significance:<12}")
-        else:
-            print(f"{strategy_name:<25} {'N/A':<10} {'N/A':<10} {'N/A':<12} {'N/A':<12}")
-    
-    print("-" * 80)
-    print("Significance levels: *** p<0.01, ** p<0.05, * p<0.10")
-    print(f"Newey-West lags used: {list(results_dict.values())[0]['lags_used']}")
-    print("=" * 80)
-
-def create_t_statistics_dataframe(results_dict):
+def calculate_t_stats_for_strategies(df, anomaly_cols, lags=12):
+    results_dict = {}
+    for column in anomaly_cols:
+        results_dict[column] = calculate_newey_west_t_stat(df[column], lags)
     #Convert t-statistics results to DataFrame
     data = []
     for strategy, results in results_dict.items():
-        strategy_name = strategy.replace('_Excess', '')
-        
         # Determine significance level
         p_val = results['p_value']
         if not np.isnan(p_val):
@@ -358,7 +214,7 @@ def create_t_statistics_dataframe(results_dict):
             sig_level = "N/A"
         
         data.append({
-            'Strategy': strategy_name,
+            'Strategy': strategy,
             'Mean': results['mean'],
             'T_Statistic': results['t_statistic'],
             'P_Value': results['p_value'],
@@ -366,218 +222,231 @@ def create_t_statistics_dataframe(results_dict):
             'Observations': results['observations'],
             'Significance': sig_level
         })
-    
     t_stats_df = pd.DataFrame(data)
-    t_stats_df = t_stats_df.sort_values('T_Statistic', key=abs, ascending=False, na_position='last')
     return t_stats_df
 
-
-# Calculate Newey-West t-statistics
-t_stats_results = calculate_t_stats_for_strategies(Excess_return_df, excess_return_cols, lags=12)
-
-# Display results
-print("\n\n===Newey-West T-Statistics===\n")
-display_t_statistics(t_stats_results)
-
-# Create DataFrame for further analysis
-t_stats_df = create_t_statistics_dataframe(t_stats_results)
-#print("\nDataFrame format:")
-#print(t_stats_df)
-# NOTE: Cross checked the results of the t-statistics with Claude. It was suspicious at first but after reveiwing the data it said it might actually be correct
-# Save to CSV if needed
-#t_stats_df.to_csv('newey_west_t_statistics.csv', index=False)
-
-
-# Regime Comparison Test - Welch's T-test
-pre_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Pre-Crisis']
-crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Crisis']
-post_crisis_returns = Excess_return_df[Excess_return_df['Regime'] == 'Post-Crisis'] 
-
-t_test_results_pre_crisis_vs_crisis = {}
-t_test_results_crisis_vs_post_crisis = {}
-
-def perform_welchs_t_test(group1, group2, columns):
+# Perform Welch's t-test between two groups for specified columns
+def perform_welchs_t_test(group1, group2, columns, group1_name, group2_name):
     results = {}
     for col in columns:
         t_stat, p_val = stats.ttest_ind(group1[col], group2[col], equal_var=False, nan_policy='omit')
         results[col] = {
-            't_statistic': t_stat,
-            'p_value': p_val,
-            'mean_group1': group1[col].mean(),
-            'mean_group2': group2[col].mean(),
+            group1_name: group1[col].mean(),
+            group2_name: group2[col].mean(),
+            'Difference': group1[col].mean() - group2[col].mean(),
+            'T_Statistic': t_stat,
+            'P_Value': p_val
         }
-    return results
+    # convert to DataFrame
+    results_df = pd.DataFrame(results).T
+    return results_df
 
-t_test_results_pre_crisis_vs_crisis = perform_welchs_t_test(pre_crisis_returns, crisis_returns, excess_return_cols)
-t_test_results_crisis_vs_post_crisis = perform_welchs_t_test(crisis_returns, post_crisis_returns, excess_return_cols)
-# Display results
-def display_welchs_t_test_results(results_dict, group1_name, group2_name):
-    print(f"\nWelch's T-test Results: {group1_name} vs {group2_name}")
-    print("=" * 80)
-    print(f"{'Strategy':<25} {'Mean_'+group1_name:<15} {'Mean_'+group2_name:<15} {'t-stat':<10} {'p-value':<12} {'Significant':<12}")
-    print("-" * 80)
+def calculate_recovery_rate_and_crisis_drop(means):
+    df = pd.DataFrame(['Strategy', 'Crisis Drop', 'Recovery Rate', 'Full Recovery?'])
+    pre_crisis_means = means.T['Pre-Crisis']
+    crisis_means = means.T['Crisis']
+    post_crisis_means = means.T['Post-Crisis']
+    crisis_drop = pre_crisis_means - crisis_means
+    recovery_rate = ((post_crisis_means - crisis_means)*100) / crisis_drop
+    full_recovery = recovery_rate >= 100
+    recovery_df = pd.DataFrame({
+        'Crisis Drop': crisis_drop,
+        'Recovery Rate (%)': recovery_rate,
+        'Full Recovery?': full_recovery
+    })
+    return recovery_df
     
-    for strategy, results in results_dict.items():
-        mean1 = results['mean_group1']
-        mean2 = results['mean_group2']
-        t_stat = results['t_statistic']
-        p_val = results['p_value']
-        
-        # Determine significance
-        if not np.isnan(p_val):
-            if p_val < 0.01:
-                significance = "***"
-            elif p_val < 0.05:
-                significance = "**"
-            elif p_val < 0.10:
-                significance = "*"
-            else:
-                significance = ""
-        else:
-            significance = "N/A"
-        
-        if not any(np.isnan([mean1, mean2, t_stat, p_val])):
-            print(f"{strategy:<25} {mean1:<15.4f} {mean2:<15.4f} {t_stat:<10.3f} {p_val:<12.4f} {significance:<12}")
-        else:
-            print(f"{strategy:<25} {'N/A':<15} {'N/A':<15} {'N/A':<10} {'N/A':<12} {'N/A':<12}")
-    
-    print("-" * 80)
-    print("Significance levels: *** p<0.01, ** p<0.05, * p<0.10")
-    print("=" * 80)
-print("\n\n===Welch's T-Test: Pre-Crisis v/s Crisis===\n")
-display_welchs_t_test_results(t_test_results_pre_crisis_vs_crisis, 'Pre-Crisis', 'Crisis')
-print("\n\n===Welch's T-Test: Crisis v/s Post-Crisis===\n")
-display_welchs_t_test_results(t_test_results_crisis_vs_post_crisis, 'Crisis', 'Post-Crisis')
+def latex_descriptive_statistics_data_prep(regime, anomaly_cols, mean, std, count, skew, kurt, t_stats, hit_rate, sharpe_ratios):
+    data = pd.DataFrame({
+        "Mean": mean.T[regime],
+        "Std Dev": std.T[regime],
+        "T-Stat": t_stats['T_Statistic'],
+        "Sharpe": sharpe_ratios.T[regime],
+        "Skewness": skew.T[regime],
+        "Kurtosis": kurt.T[regime],
+        "Hit %": hit_rate.T[regime],
+        "Observations": count.T[regime]
+    })
+    return data 
+    # print("\n\n=== Descriptive Statistics for " + regime + " ===\n")
+    # print(round(data,3))
+    # latex = data.to_latex(float_format="%.3f", index=False)
+    # return latex
 
-# Calculate and print 'Crisis Drop' = Mean(Crisis) - Mean(Pre-Crisis)
-drop_results = {}
-for strategy, results in t_test_results_pre_crisis_vs_crisis.items():
-    drop = results['mean_group2'] - results['mean_group1']
-    drop_results[strategy] = drop
-# print drop_resutls in a formatted way
-print("\n\n===Crisis Drop: Crisis v/s Pre-Crisis===\n")
-print(f"{'Strategy':<25} {'Crisis Drop':<15}")
-print("-" * 40)
-for strategy, drop in drop_results.items():
-    print(f"{strategy:<25} {drop:<15.4f}")
-print("-" * 40) 
+# Load Data
+data = load_data(files_to_load)
+# print("Initial Data Loaded:")
+# print(round(data,3))
 
-# Calculate Recovery Rate = (Post-Crisis Mean - Crisis Mean)* 100 / (Pre-Crisis Mean - Crisis Mean) (From drop_results)
-print("\nRecovery Rate (%):")
-recovery_results = {}
-for strategy, results in t_test_results_pre_crisis_vs_crisis.items():
-    pre_crisis_mean = results['mean_group1']
-    crisis_mean = results['mean_group2']
-    post_crisis_mean = t_test_results_crisis_vs_post_crisis[strategy]['mean_group2']
-    
-    if (pre_crisis_mean - crisis_mean) != 0:
-        recovery_rate = ((post_crisis_mean - crisis_mean) * 100) / (pre_crisis_mean - crisis_mean)
-    else:
-        recovery_rate = np.nan  # Avoid division by zero
-    
-    recovery_results[strategy] = recovery_rate
-print("\n\n===Recovery Rate (%): Post-Crisis v/s Crisis===\n")
-#print recovery_results in a formatted way
-print(f"{'Strategy':<25} {'Recovery Rate (%)':<20}")
-print("-" * 45)
-for strategy, rate in recovery_results.items():
-    print(f"{strategy:<25} {rate:<20.2f}")
-print("-" * 45) 
+# Extract data within Regime Periods
+data = data[(data['date'] >= start_date) & (data['date'] <= end_date)] 
+# print("Data after filtering by Thesis Timeframe:")
+# print(round(data,3))
 
-# ***************** Visualizations ************************
+# Load Fama-French Factors
+data = load_fama_french_factors_to_data(ff_factors_file, data, start_date, end_date)
+# print("Data after loading anomalies and Fama-French factors:")
+# print(round(data,3))
 
-# Visualization for each anomaly with regime shading
-regime_colors = {
-    'Pre-Crisis': '#e0e0e0',
-    'Crisis': '#ffcccc',
-    'Post-Crisis': '#ccffcc'
-}
+# Add Regime Column
+data = add_regime_column(data, regime_periods)
+# print("Data with Regime Column Added:")
+# print(round(data,3))
 
-# Plot all anomalies as base 100 index on one graph
-print("\n\n===Time series plots: Cumulative long-short returns (base=100) with regime shading===\n")
-fig, ax = plt.subplots(figsize=(14, 6))
-color_cycle = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
-anomaly_colors = {anomaly: next(color_cycle) for anomaly in anomaly_cols}
+# # Verify Regime Counts
+# print("\n\n=== Regime Counts ===\n")
+# print(data['Regime'].value_counts())
 
-for anomaly in anomaly_cols:
-    returns = Excess_return_df[anomaly].fillna(0)
-    index = 100 * (1 + returns).cumprod()
-    ax.plot(Excess_return_df['date'], index, label=anomaly, color=anomaly_colors[anomaly])
+# Calculate Excess Returns
+excess_returns = calculate_excess_returns(data, anomaly_cols)
+# print("Excess Returns DataFrame:")
+# print(round(excess_returns,3))
 
-# Shade regimes
-for regime, (start, end) in regime_periods.items():
-    start_dt = pd.to_datetime(start)
-    end_dt = pd.to_datetime(end)
-    ax.axvspan(start_dt, end_dt, color=regime_colors[regime], alpha=0.2, label=regime)
+# Mean Monthly Return by Regime
+monthly_mean = excess_returns.groupby('Regime')[anomaly_cols].mean().round(4)
+# print("\n\n=== Mean Monthly Excess Returns by Regime ===\n")
+# print(round(monthly_mean,3)) 
 
-ax.set_title('Long-Short Returns Over Regimes (Base 100 Index, All Anomalies)')
-ax.set_xlabel('Date')
-ax.set_ylabel('Index (Base 100)')
-ax.grid(True)
+# Standard Deviation by Regime
+monthly_std = excess_returns.groupby('Regime')[anomaly_cols].std().round(4)
+# print("\n\n=== Standard Deviation of Excess Returns ===\n")
+# print(round(monthly_std,3))
 
-anomaly_handles = [plt.Line2D([], [], color=anomaly_colors[a], label=a) for a in anomaly_cols]
-regime_handles = [mpatches.Patch(color=regime_colors[r], label=r) for r in regime_colors]
-handles = anomaly_handles + regime_handles
-ax.legend(handles=handles, loc='upper left', fontsize='medium')
+# Number of Observations by Regime
+monthly_count = excess_returns.groupby('Regime')[anomaly_cols].count()
+# print("\n\n=== Observations for Regimes ===\n")
+# print(monthly_count)
 
-plt.tight_layout()
-#plt.show()
+# Skewness by Regime
+monthly_skew = excess_returns.groupby('Regime')[anomaly_cols].skew().round(4)
+# print("\n\n=== Skewness of Excess Returns ===\n")
+# print(round(monthly_skew,3))
 
-# Distribution comparisons: Overlaid histograms by regime for each anomaly
-print("\n\n===Distribution comparisons: Overlaid histograms by regime for each anomaly===\n")
-for anomaly in anomaly_cols:
-    plt.figure(figsize=(10, 6))
-    for regime, color in regime_colors.items():
-        subset = Excess_return_df[Excess_return_df['Regime'] == regime][anomaly].dropna()
-        sns.histplot(subset, kde=False, color=color, label=regime, stat='density', alpha=0.5, bins=20)
-    plt.title(f'Distribution of {anomaly} Returns by Regime')
-    plt.xlabel('Return')
-    plt.ylabel('Density')
-    plt.legend(title='Regime')
-    plt.tight_layout()
-    #plt.show()
+# Kurtosis by Regime
+monthly_kurt = excess_returns.groupby('Regime')[anomaly_cols].apply(lambda x: x.kurtosis()).round(4)
+# print("\n\n=== Fischer's Kurtosis of Excess Returns ===\n")
+# print(round(monthly_kurt,3))
 
-# Summary visualization: Bar chart of mean returns by regime
-print("\n\n===Summary visualization: Bar chart of mean returns by regime===\n")
+#Hit Percentage by Regime
+hit_precentage = calculate_hit_precentage_by_regime(excess_returns, anomaly_cols)
+# print("\n\n=== Hit Percentage by Regime ===\n")
+# print(round(hit_precentage,3))
 
-mean_returns = Excess_return_df.groupby('Regime')[anomaly_cols].mean().T
-fig, ax = plt.subplots(figsize=(13, 7))
+# Sharpe Ratios by Anomaly
+sharpe_ratio_by_regime = calculate_regime_sharpe_ratios(excess_returns, anomaly_cols)
+# print("\n\n=== Sharpe Ratios by Regime ===\n")
+# print(round(sharpe_ratio_by_regime,3))
 
-# Use pastel colors for bars
-bar_colors = [regime_colors.get(r, cm.Pastel1(i)) for i, r in enumerate(mean_returns.columns)]
-bars = mean_returns.plot(kind='bar', ax=ax, color=bar_colors, edgecolor='black', width=0.75)
+# # Newey-West t-statistics for each anomaly OVERALL
+# t_stats_df = calculate_t_stats_for_strategies(excess_returns, anomaly_cols, lags=12)
+# print("\n\n=== Newey-West t-statistics for Each Anomaly ===\n")
+# print(t_stats_df)
 
-plt.title('Mean Returns by Regime for Each Anomaly', fontsize=18, fontweight='bold', pad=20)
-plt.xlabel('Anomaly', fontsize=14)
-plt.ylabel('Mean Return', fontsize=14)
-plt.grid(axis='y', linestyle='--', alpha=0.5)
+# Prepare data subsets for regime-wise Newey-West t-statistics
+pre_crisis_returns = excess_returns[excess_returns['Regime'] == 'Pre-Crisis']
+crisis_returns = excess_returns[excess_returns['Regime'] == 'Crisis']
+post_crisis_returns = excess_returns[excess_returns['Regime'] == 'Post-Crisis']
 
-# Add value labels to each bar
-for container in ax.containers:
-    ax.bar_label(container, fmt='%.3f', label_type='edge', fontsize=12, padding=2)
+# Newey-West t-statistics for each anomaly by Regime
+pre_crisis_t_stats = calculate_t_stats_for_strategies(pre_crisis_returns, anomaly_cols, lags=12)
+crisis_t_stats = calculate_t_stats_for_strategies(crisis_returns, anomaly_cols, lags=12)
+post_crisis_t_stats = calculate_t_stats_for_strategies(post_crisis_returns, anomaly_cols, lags=12)
+# print("\n\n=== Newey-West t-statistics for Pre-Crisis ===\n")
+# print(round(pre_crisis_t_stats,3))
+# print("\n\n=== Newey-West t-statistics for Crisis ===\n")
+# print(round(crisis_t_stats,3))
+# print("\n\n=== Newey-West t-statistics for Post-Crisis ===\n")
+# print(round(post_crisis_t_stats,3))
 
-# Custom legend with larger font and better placement
-plt.legend(title='Regime', fontsize=13, title_fontsize=14, loc='lower right', frameon=True)
-plt.xticks(rotation=25, ha='right', fontsize=12)
-plt.yticks(fontsize=12)
-plt.tight_layout()
-plt.show()
+# Welch's t-test between Regimes
+pre_vs_crisis_results = perform_welchs_t_test(pre_crisis_returns, crisis_returns, anomaly_cols, 'Pre-Crisis', 'Crisis')
+crisis_vs_post_results = perform_welchs_t_test(crisis_returns, post_crisis_returns, anomaly_cols, 'Crisis', 'Post-Crisis')
+# Export Comparison Results to Excel
+with pd.ExcelWriter('./Results/welchs_t_test_results.xlsx') as writer:
+    pre_vs_crisis_results.to_excel(writer, sheet_name='Pre-Crisis vs Crisis')
+    crisis_vs_post_results.to_excel(writer, sheet_name='Crisis vs Post-Crisis')
 
-# TODO: Genereate LaTex Report
 
-# Save as excel
-"""
-ff_factors.to_excel('Excel/Fama_French_Factors_Clean.xlsx')
-monthly_mean.to_excel('Excel/Mean_Monthly_Return.xlsx')
-monthly_std.to_excel('Excel/Standard_Deviation_Monthly.xlsx')
-monthly_count.to_excel('Excel/Observation_Count_For_Regimes.xlsx')
-Excess_return_df.to_excel('Excel/Final_Data_With_Anomalies_FFFactors_Regimes_ExcessReturns.xlsx')
-sharpe_df.to_excel('Excel/Sharpe_Ratio_Returns.xlsx')
-regime_sharpe_table.to_excel('Excel/Sharpe_Ratio_Excess_Returns.xlsx')
-hit_rate_df.to_excel('Excel/Hit_Rate_Returns.xlsx')
-hit_rate_excess_df.to_excel('Excel/Hit_Rate_Excess_Returns.xlsx')
-t_stats_df.to_excel('Excel/Newey_West_T_Statistics.xlsx')
+print("\n\n=== Welch's t-test: Pre-Crisis vs Crisis ===\n")
+print(round(pre_vs_crisis_results, 3))
+print("\n\n=== Welch's t-test: Crisis vs Post-Crisis ===\n")
+print(round(crisis_vs_post_results, 3))
 
-# NOTE: Welch's Test (Both), Crisis Drop and Recovery Rate not saved as excel
+# Latex Table Generation for Descriptive Statistics 
+pre_crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
+    'Pre-Crisis',
+    anomaly_cols,
+    monthly_mean,
+    monthly_std,
+    monthly_count,
+    monthly_skew,
+    monthly_kurt,
+    pre_crisis_t_stats.set_index('Strategy'),
+    hit_precentage,
+    sharpe_ratio_by_regime
+)
 
-"""
+crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
+    'Crisis',
+    anomaly_cols,
+    monthly_mean,
+    monthly_std,
+    monthly_count,
+    monthly_skew,
+    monthly_kurt,
+    crisis_t_stats.set_index('Strategy'),
+    hit_precentage,
+    sharpe_ratio_by_regime
+)
+
+post_crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
+    'Post-Crisis',
+    anomaly_cols,
+    monthly_mean,
+    monthly_std,
+    monthly_count,
+    monthly_skew,
+    monthly_kurt,
+    post_crisis_t_stats.set_index('Strategy'),
+    hit_precentage,
+    sharpe_ratio_by_regime
+)   
+# Export Descriptive Statistics to excel
+with pd.ExcelWriter('./Results/descriptive_statistics_tables.xlsx') as writer:
+    pre_crisis_descriptive_stats.to_excel(writer, sheet_name='Pre-Crisis')
+    crisis_descriptive_stats.to_excel(writer, sheet_name='Crisis')
+    post_crisis_descriptive_stats.to_excel(writer, sheet_name='Post-Crisis')
+
+#latex_string = "\n\n".join([pre_crisis_descriptive_stats, crisis_descriptive_stats, post_crisis_descriptive_stats, pre_crisis_descriptive_stats])
+# with open('descriptive_statistics_tables.tex', 'w') as f:
+#     f.write(latex_string)
+
+# #Print descriptive statistics 
+# print("\n\n=== Pre-Crisis Descriptive Statistics Tables ===\n")
+# print(pre_crisis_descriptive_stats)
+# print("\n\n=== Crisis Descriptive Statistics Tables ===\n")
+# print(crisis_descriptive_stats)
+# print("\n\n=== Post-Crisis Descriptive Statistics Tables ===\n")
+# print(post_crisis_descriptive_stats)
+
+# Calculate Recovery Rate and Crisis Drop
+# recovery_metric = calculate_recovery_rate_and_crisis_drop(monthly_mean)
+# print("\n\n=== Recovery Rate and Crisis Drop ===\n")
+# recovery_metric = calculate_recovery_rate_and_crisis_drop(monthly_mean)
+# print(round(recovery_metric,3))
+
+# Correlation Matrix on Excess Returns of Anomalies for Each Regime
+pre_crisis_corr = pre_crisis_returns[anomaly_cols].corr().round(2)
+crisis_corr = crisis_returns[anomaly_cols].corr().round(2)
+post_crisis_corr = post_crisis_returns[anomaly_cols].corr().round(2)
+print("\n\n=== Correlation Matrix: Pre-Crisis ===\n")
+print(pre_crisis_corr)
+print("\n\n=== Correlation Matrix: Crisis ===\n")
+print(crisis_corr)
+print("\n\n=== Correlation Matrix: Post-Crisis ===\n")
+print(post_crisis_corr)
+# Export Correlation Matrices to Excel
+with pd.ExcelWriter('./Results/correlation_matrices.xlsx') as writer:
+    pre_crisis_corr.to_excel(writer, sheet_name='Pre-Crisis')
+    crisis_corr.to_excel(writer, sheet_name='Crisis')
+    post_crisis_corr.to_excel(writer, sheet_name='Post-Crisis')
