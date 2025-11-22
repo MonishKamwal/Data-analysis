@@ -24,16 +24,16 @@ regime_periods = {
 
 #Files to Load
 files_to_load = {
-    'Accruals' : 'Accruals.csv',
-    'Assest Growth': 'AssetGrowth.csv',
-    'BM': 'BM.csv',
-    'Gross Profit': 'GP.csv',
-    'Momentum': 'Mom12m.csv',
-    'Leaverage Ret': 'Leverage_ret.csv',
+    'Accruals' : './Descriptive Stats Data/Accruals.csv',
+    'Assest Growth': './Descriptive Stats Data/AssetGrowth.csv',
+    'BM': './Descriptive Stats Data/BM.csv',
+    'Gross Profit': './Descriptive Stats Data/GP.csv',
+    'Momentum': './Descriptive Stats Data/Mom12m.csv',
+    'Leaverage Ret': './Descriptive Stats Data/Leverage_ret.csv',
 }
 anomaly_cols = list(files_to_load.keys())
 
-ff_factors_file = 'FF_Factors_clean.csv'
+ff_factors_file = './Descriptive Stats Data/FF_Factors_clean.csv'
 
 # Load Data
 data = load_data(files_to_load)
