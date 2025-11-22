@@ -133,7 +133,7 @@ post_crisis_t_stats = calculate_t_stats_for_strategies(post_crisis_returns, anom
 pre_vs_crisis_results = perform_welchs_t_test(pre_crisis_returns, crisis_returns, anomaly_cols, 'Pre-Crisis', 'Crisis')
 crisis_vs_post_results = perform_welchs_t_test(crisis_returns, post_crisis_returns, anomaly_cols, 'Crisis', 'Post-Crisis')
 # Export Comparison Results to Excel
-with pd.ExcelWriter('./Results/welchs_t_test_results.xlsx') as writer:
+with pd.ExcelWriter('./Descriptive Stats Results/welchs_t_test_results.xlsx') as writer:
     pre_vs_crisis_results.to_excel(writer, sheet_name='Pre-Crisis vs Crisis')
     crisis_vs_post_results.to_excel(writer, sheet_name='Crisis vs Post-Crisis')
 
@@ -183,7 +183,7 @@ post_crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
     sharpe_ratio_by_regime
 )   
 # Export Descriptive Statistics to excel
-with pd.ExcelWriter('./Results/descriptive_statistics_tables.xlsx') as writer:
+with pd.ExcelWriter('./Descriptive Stats Results/descriptive_statistics_tables.xlsx') as writer:
     pre_crisis_descriptive_stats.to_excel(writer, sheet_name='Pre-Crisis')
     crisis_descriptive_stats.to_excel(writer, sheet_name='Crisis')
     post_crisis_descriptive_stats.to_excel(writer, sheet_name='Post-Crisis')
@@ -217,7 +217,7 @@ print(crisis_corr)
 print("\n\n=== Correlation Matrix: Post-Crisis ===\n")
 print(post_crisis_corr)
 # Export Correlation Matrices to Excel
-with pd.ExcelWriter('./Results/correlation_matrices.xlsx') as writer:
+with pd.ExcelWriter('./Descriptive Stats Results/correlation_matrices.xlsx') as writer:
     pre_crisis_corr.to_excel(writer, sheet_name='Pre-Crisis')
     crisis_corr.to_excel(writer, sheet_name='Crisis')
     post_crisis_corr.to_excel(writer, sheet_name='Post-Crisis')
