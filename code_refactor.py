@@ -268,10 +268,11 @@ def latex_descriptive_statistics_data_prep(regime, anomaly_cols, mean, std, coun
         "Hit %": hit_rate.T[regime],
         "Observations": count.T[regime]
     })
-    print("\n\n=== Descriptive Statistics for " + regime + " ===\n")
-    print(round(data,3))
-    latex = data.to_latex(float_format="%.3f", index=False)
-    return latex
+    return data 
+    # print("\n\n=== Descriptive Statistics for " + regime + " ===\n")
+    # print(round(data,3))
+    # latex = data.to_latex(float_format="%.3f", index=False)
+    # return latex
 
 # Load Data
 data = load_data(files_to_load)
@@ -361,6 +362,12 @@ post_crisis_t_stats = calculate_t_stats_for_strategies(post_crisis_returns, anom
 # Welch's t-test between Regimes
 pre_vs_crisis_results = perform_welchs_t_test(pre_crisis_returns, crisis_returns, anomaly_cols, 'Pre-Crisis', 'Crisis')
 crisis_vs_post_results = perform_welchs_t_test(crisis_returns, post_crisis_returns, anomaly_cols, 'Crisis', 'Post-Crisis')
+# Export Comparison Results to Excel
+with pd.ExcelWriter('./Results/welchs_t_test_results.xlsx') as writer:
+    pre_vs_crisis_results.to_excel(writer, sheet_name='Pre-Crisis vs Crisis')
+    crisis_vs_post_results.to_excel(writer, sheet_name='Crisis vs Post-Crisis')
+
+
 print("\n\n=== Welch's t-test: Pre-Crisis vs Crisis ===\n")
 print(round(pre_vs_crisis_results, 3))
 print("\n\n=== Welch's t-test: Crisis vs Post-Crisis ===\n")
@@ -379,6 +386,7 @@ pre_crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
     hit_precentage,
     sharpe_ratio_by_regime
 )
+
 crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
     'Crisis',
     anomaly_cols,
@@ -391,6 +399,7 @@ crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
     hit_precentage,
     sharpe_ratio_by_regime
 )
+
 post_crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
     'Post-Crisis',
     anomaly_cols,
@@ -403,7 +412,13 @@ post_crisis_descriptive_stats = latex_descriptive_statistics_data_prep(
     hit_precentage,
     sharpe_ratio_by_regime
 )   
-latex_string = "\n\n".join([pre_crisis_descriptive_stats, crisis_descriptive_stats, post_crisis_descriptive_stats, pre_crisis_descriptive_stats])
+# Export Descriptive Statistics to excel
+with pd.ExcelWriter('./Results/descriptive_statistics_tables.xlsx') as writer:
+    pre_crisis_descriptive_stats.to_excel(writer, sheet_name='Pre-Crisis')
+    crisis_descriptive_stats.to_excel(writer, sheet_name='Crisis')
+    post_crisis_descriptive_stats.to_excel(writer, sheet_name='Post-Crisis')
+
+#latex_string = "\n\n".join([pre_crisis_descriptive_stats, crisis_descriptive_stats, post_crisis_descriptive_stats, pre_crisis_descriptive_stats])
 # with open('descriptive_statistics_tables.tex', 'w') as f:
 #     f.write(latex_string)
 
@@ -416,10 +431,10 @@ latex_string = "\n\n".join([pre_crisis_descriptive_stats, crisis_descriptive_sta
 # print(post_crisis_descriptive_stats)
 
 # Calculate Recovery Rate and Crisis Drop
-recovery_metric = calculate_recovery_rate_and_crisis_drop(monthly_mean)
-print("\n\n=== Recovery Rate and Crisis Drop ===\n")
-recovery_metric = calculate_recovery_rate_and_crisis_drop(monthly_mean)
-print(round(recovery_metric,3))
+# recovery_metric = calculate_recovery_rate_and_crisis_drop(monthly_mean)
+# print("\n\n=== Recovery Rate and Crisis Drop ===\n")
+# recovery_metric = calculate_recovery_rate_and_crisis_drop(monthly_mean)
+# print(round(recovery_metric,3))
 
 # Correlation Matrix on Excess Returns of Anomalies for Each Regime
 pre_crisis_corr = pre_crisis_returns[anomaly_cols].corr().round(2)
@@ -431,3 +446,8 @@ print("\n\n=== Correlation Matrix: Crisis ===\n")
 print(crisis_corr)
 print("\n\n=== Correlation Matrix: Post-Crisis ===\n")
 print(post_crisis_corr)
+# Export Correlation Matrices to Excel
+with pd.ExcelWriter('./Results/correlation_matrices.xlsx') as writer:
+    pre_crisis_corr.to_excel(writer, sheet_name='Pre-Crisis')
+    crisis_corr.to_excel(writer, sheet_name='Crisis')
+    post_crisis_corr.to_excel(writer, sheet_name='Post-Crisis')
